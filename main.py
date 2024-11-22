@@ -1,16 +1,32 @@
 import numpy as np
+#from Cython.Shadow import returns
 from uncertainties import ufloat, unumpy, std_dev
 import matplotlib.pyplot as plt
 from uncertainties.unumpy import nominal_values, std_devs
 from scipy.optimize import curve_fit
-from wheel.cli import unpack_f
+import pandas as pd
+
+#from wheel.cli import unpack_f
 
 unc = 2 * 0.1  #cm
 dreiecksv = unc / np.sqrt(3)
+messunsicherheit_waage = .001  #kg
 
 steigungen = []
 
-import pandas as pd
+
+H = ufloat(33.25, .25)
+h_0 = H-ufloat(3.1, .25)
+L = ufloat(58.8, .25) - ufloat(1, .25)
+abstaende_s = [50, 40, 30, 20, 10, 0]
+
+
+l = ufloat(189.1, .1/np.sqrt(3))  #cm
+
+m_1 = ufloat(176.7*.001, messunsicherheit_waage)
+m_2 = ufloat(490.7*.001, messunsicherheit_waage) #kg
+m_3 = ufloat(63.9 * .001, messunsicherheit_waage)
+
 
 def mittelwert_t1(header:str, y_0:float, path:str="daten1.csv", c:int=1):
     df = pd.read_csv(path, delimiter=",")
@@ -43,7 +59,7 @@ def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.
         df[column] = df[column].astype(str).str.replace(",", ".").astype(float)
 
     m_werte2 = []
-    for i in range(5):
+    for i in range(6):
         auslenkungen_res = []
         for j in range(5):
             auslenkungen_res.append(ufloat(df[header][j + 5 * i]-26.4, dreicksv_2))
@@ -104,20 +120,48 @@ def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path
 def get_h(h_0, s, L, H):
     return h_0 - s / ((1+ (L / H)**2)**(1/2))
 
+def get_epsilon(m, l, m_1=m_3, m_2=m_2):
+    #return a_1**2 / (2 * l * h)
+    #return m**2 / (2 * l)
+    return m**2 * ((m_1+m_2)**2) / (8*l*m_1**2)
 
 
-def plot_rollende_Kugel(path="daten2.csv"):
+
+def plot_rollende_Kugel(path="daten2.csv", show_figure=True):
     df = pd.read_csv(path, delimiter=",")
     for column in df:
         df[column] = df[column].astype(str).str.replace(",", ".").astype(float)
 
-    fallhöhen = df["Auslenkung 1 T2"][::5]
+    fallhöhen = df["Auslenkung 1 T2"][::5]  #fallhöhe meint s
     unc_fh = 0.25/np.sqrt(3)
     fallhöhen = [ufloat(fh, unc_fh) for fh in fallhöhen]
 
     auslenkungen = mittelwert_t2()
+    h_s = [((get_h(h_0, s=s, L=L, H=H))**(1/2)) for s in fallhöhen]
 
-    fallhöhen_nom = ...
+    hs_nom = nominal_values(h_s)
+    auslenkungen_nom = nominal_values(auslenkungen)
+    hs_err = std_devs(h_s)
+    auslenkungen_err = std_devs(auslenkungen)
+    print(hs_nom, auslenkungen_nom, hs_err, auslenkungen_err)
+
+    params, params_covariance = curve_fit(f, hs_nom, auslenkungen_nom, p0=[1, 0], sigma=auslenkungen_err, absolute_sigma=True)
+    m_fit, n_fit = ufloat(params[0], np.sqrt(params_covariance[0, 0])), ufloat(params[1],
+                                                                               np.sqrt(params_covariance[1, 1]))
+
+    plt.figure(figsize=(15, 7))
+    plt.errorbar(hs_nom, auslenkungen_nom, xerr=hs_err, yerr=auslenkungen_err, marker='.', markersize=8, linestyle="none", label="Messdaten")
+    #plt.errorbar(zeiten_nom, positionen_nom, yerr=y1_err,fmt=".", label='Messdaten')
+    plt.plot(hs_nom, f(hs_nom, unumpy.nominal_values(m_fit), unumpy.nominal_values(n_fit)), 'r-',
+            label=f'Ausgleichsgerade: {m_fit} * x  + {n_fit}')
+    plt.tick_params(axis='both', labelsize="16")
+    plt.xlabel('Fallhöhe als $\sqrt{h(s)}$ [cm]', fontsize="16")
+    plt.ylabel('Auslenkung $x_2$ (resultierend) [cm]', fontsize="16")
+    plt.legend(fontsize="17")
+    plt.grid(True)
+    if show_figure:
+        plt.show()
+    return m_fit
 
 
 
@@ -125,18 +169,18 @@ if __name__ == "__main__":
     #m_werte2 = mittelwert_t1("Auslenkung 4 T1")
     mittelwert_t2()
 
-    #plot_ausgleichsgerade("Auslenkung 1 T1", mittelwerte_y=m_werte1, x_0=17.62, c=1)
-    #plot_ausgleichsgerade("Auslenkung 3 T1", mittelwerte_y=mittelwert_t1("Auslenkung 4 T1", 17.62, c=2), x_0=26.4, c=2)
-#
-    #print(steigungen, sum(steigungen))
+    plot_ausgleichsgerade("Auslenkung 1 T1", mittelwerte_y=m_werte1, x_0=17.62, c=1)
+    plot_ausgleichsgerade("Auslenkung 3 T1", mittelwerte_y=mittelwert_t1("Auslenkung 4 T1", 17.62, c=2), x_0=26.4, c=2)
 
-    H = ufloat(33.25, .25)
-    h_0 = H-ufloat(3.1, .25)
-    L = ufloat(58.8, .25) - ufloat(1, .25)
-    abstaende_s = [50,40,30,20,10,0]
+    print(steigungen, sum(steigungen))
+
+
     for abstand in abstaende_s:
         print(get_h(h_0,ufloat(abstand, .25), L, H))
 
 
+    plot_rollende_Kugel()
+
+    print(get_epsilon(m=plot_rollende_Kugel(show_figure=False), l=l))
 
 
