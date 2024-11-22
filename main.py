@@ -9,8 +9,9 @@ import pandas as pd
 #from wheel.cli import unpack_f
 
 unc = 2 * 0.1  #cm
-dreiecksv = unc / np.sqrt(3)
-messunsicherheit_waage = .001  #kg
+dreiecksv_auslenkung_messstab = 2 * 0.0005 / np.sqrt(6)
+messunsicherheit_waage = .0001 / np.sqrt(6)  #kg
+#dreicksv_messband_s = ...
 
 steigungen = []
 
@@ -39,9 +40,9 @@ def mittelwert_t1(header:str, y_0:float, path:str="daten1.csv", c:int=1):
         auslenkungen_res = []
         for j in range(5):
             if c==1:
-                auslenkungen_res.append(ufloat(df[header][j+5*i]-y_0, dreiecksv))
+                auslenkungen_res.append(ufloat(df[header][j+5*i] - y_0, dreiecksv_auslenkung_messstab))
             elif c==2:
-                auslenkungen_res.append(ufloat(y_0-df[header][j + 5 * i], dreiecksv))
+                auslenkungen_res.append(ufloat(y_0 - df[header][j + 5 * i], dreiecksv_auslenkung_messstab))
         print(auslenkungen_res)
         m_wert = sum(auslenkungen_res) / len(auslenkungen_res)
         m_werte1.append(m_wert)
@@ -49,7 +50,6 @@ def mittelwert_t1(header:str, y_0:float, path:str="daten1.csv", c:int=1):
     return m_werte1
 
 
-dreicksv_2 = 0.1 / np.sqrt(3) + 0.25  # in cm, noch besprechen
 
 def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.csv"):
     m_werte2 = []
@@ -62,7 +62,7 @@ def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.
     for i in range(6):
         auslenkungen_res = []
         for j in range(5):
-            auslenkungen_res.append(ufloat(df[header][j + 5 * i]-26.4, dreicksv_2))
+            auslenkungen_res.append(ufloat(df[header][j + 5 * i]-26.4, dreiecksv_auslenkung_messstab))
         print(auslenkungen_res)
         m_wert = sum(auslenkungen_res) / len(auslenkungen_res)
         m_werte2.append(m_wert)
@@ -78,17 +78,17 @@ m_werte1 = mittelwert_t1("Auslenkung 2 (resultierend) T1", y_0=26.4)
 
 def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path:str="daten1.csv"):
 
-    unc = .1/np.sqrt(3)
+
 
     df = pd.read_csv(path, delimiter=",")
     for column in df:
         df[column] = df[column].str.replace(",", ".").astype(float)
     if c==1:
-        x1 = [ufloat(x_0-v, unc) for v in df[x_name][::5]]
+        x1 = [ufloat(x_0 - v, dreiecksv_auslenkung_messstab) for v in df[x_name][::5]]
     elif c==2:
-        x1 = [ufloat(v-x_0, unc) for v in df[x_name][::5]]
+        x1 = [ufloat(v - x_0, dreiecksv_auslenkung_messstab) for v in df[x_name][::5]]
     print(x1)
-    #y1 = [ufloat(v, unc) for v in df[y_name]]
+    #y1 = [ufloat(v, dreiecksv_auslenkung_maß) for v in df[y_name]]
     y1 = mittelwerte_y
     print(mittelwerte_y)
     x1_nominal = nominal_values(x1)
@@ -168,6 +168,7 @@ def plot_rollende_Kugel(path="daten2.csv", show_figure=True):
 if __name__ == "__main__":
     #m_werte2 = mittelwert_t1("Auslenkung 4 T1")
     mittelwert_t2()
+    #mittelwert_t1(..)
 
     plot_ausgleichsgerade("Auslenkung 1 T1", mittelwerte_y=m_werte1, x_0=17.62, c=1)
     plot_ausgleichsgerade("Auslenkung 3 T1", mittelwerte_y=mittelwert_t1("Auslenkung 4 T1", 17.62, c=2), x_0=26.4, c=2)
