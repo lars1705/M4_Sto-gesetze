@@ -9,9 +9,11 @@ import pandas as pd
 #from wheel.cli import unpack_f
 
 #unc = 2 * 0.1  #cm
-dreiecksv_auslenkung_messstab = 2 * 0.05 / np.sqrt(6)  # in cm
-messunsicherheit_waage = .0001 / np.sqrt(6)  #kg +x nach Herstellerangabe
-dreicksv_messband_1 = 0.025 * 1/np.sqrt(6) # in cm
+dreiecksv_auslenkung_messstab = 0.05 / np.sqrt(6)  # in cm
+messunsicherheit_waage = .0001 / np.sqrt(6)  #kg
+messunsicherheit_waage_hersteller = 0  #kg
+messunsicherheit_waage_ges = std_dev(ufloat(1, messunsicherheit_waage)+ufloat(1,messunsicherheit_waage_hersteller))
+dreicksv_messband_1 = 0.025  # in cm
 dreiecksv_messband_2 = dreiecksv_auslenkung_messstab
 dreiecksv_uns_messband_ges = std_dev(ufloat(1, dreicksv_messband_1)+ufloat(1,dreiecksv_messband_2))
 #print(dreiecksv_uns_messband_ges)
@@ -19,20 +21,22 @@ dreiecksv_uns_messband_ges = std_dev(ufloat(1, dreicksv_messband_1)+ufloat(1,dre
 steigungen = []
 
 
-H = ufloat(33.25, dreiecksv_uns_messband_ges)
-h_0 = H-ufloat(3.1, dreiecksv_uns_messband_ges)
-L = ufloat(58.8, dreiecksv_uns_messband_ges) - ufloat(1, dreiecksv_uns_messband_ges)
-abstaende_s = [50, 40, 30, 20, 10, 0]
+H = ufloat(33.25, dreiecksv_uns_messband_ges) * .01  #in m
+h_0 = H-ufloat(3.1, dreiecksv_uns_messband_ges) * .01  #in m
+L = (ufloat(58.8, dreiecksv_uns_messband_ges) - ufloat(1, dreiecksv_uns_messband_ges)) *.01  #in m
+
+abstaende_s = [0, 10, 20, 30, 40, 50]  #in cm
+abstaende_s = [ufloat(abstand, dreiecksv_uns_messband_ges) * .01 for abstand in abstaende_s]  #in m, mit MU
 
 
-l = ufloat(189.1, dreiecksv_uns_messband_ges)  #cm
+l = ufloat(189.1, dreiecksv_uns_messband_ges) * .01  # in m
 
-m_1 = ufloat(176.7*.001, messunsicherheit_waage)
-m_2 = ufloat(490.7*.001, messunsicherheit_waage) #kg
-m_3 = ufloat(63.9 * .001, messunsicherheit_waage)
+M_1 = ufloat(176.7 * .001, messunsicherheit_waage_ges)
+M_2 = ufloat(490.7 * .001, messunsicherheit_waage_ges) #kg
+M_3 = ufloat(63.9 * .001, messunsicherheit_waage_ges)
 
 
-def mittelwert_t1(header:str, y_0:float, path:str="daten1.csv", c:int=1):
+def mittelwert_t1(header:str, y_0:float, header_2:str, path:str="daten1.csv", c:int=1):
     df = pd.read_csv(path, delimiter=",")
     for column in df:
         df[column] = df[column].str.replace(",", ".").astype(float)
@@ -50,6 +54,26 @@ def mittelwert_t1(header:str, y_0:float, path:str="daten1.csv", c:int=1):
         m_wert = sum(auslenkungen_res) / len(auslenkungen_res)
         m_werte1.append(m_wert)
     print("-----", m_werte1)
+
+
+
+    data = []
+    for i, x in enumerate(df[header_2][::5].values):
+        if c==1:
+            data.append([ufloat(17.62-x, dreiecksv_auslenkung_messstab), m_werte1[i]])
+        elif c==2:
+            data.append([ufloat(x-26.4, dreiecksv_auslenkung_messstab), m_werte1[i]])
+    df_2 = pd.DataFrame(data, columns=["Manuelle Auslenkung [cm]", "Mittelwert resultierende Auslenkung [cm]"])
+
+
+    fig, ax = plt.subplots()
+    fig.patch.set_visible(False)
+    ax.axis('off')
+    ax.axis('tight')
+    ax.table(cellText=df_2.values, colLabels=["Manuelle Auslenkung [cm]", "Mittelwert resultierende Auslenkung [cm]"], loc='center')
+    fig.tight_layout()
+    plt.show()
+
     return m_werte1
 
 
@@ -61,7 +85,6 @@ def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.
     for column in df:
         df[column] = df[column].astype(str).str.replace(",", ".").astype(float)
 
-    m_werte2 = []
     for i in range(6):
         auslenkungen_res = []
         for j in range(5):
@@ -74,7 +97,6 @@ def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.
 
 def f(x, m, n):
     return m*x+n
-
 
 
 
@@ -119,9 +141,7 @@ def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path
 def get_h(h_0, s, L, H):
     return h_0 - s / ((1+ (L / H)**2)**(1/2))
 
-def get_epsilon(m, l, m_1=m_3, m_2=m_2):
-    #return a_1**2 / (2 * l * h)
-    #return m**2 / (2 * l)
+def get_epsilon(m, l, m_1=M_3, m_2=M_2):
     return m**2 * ((m_1+m_2)**2) / (8*l*m_1**2)
 
 
@@ -131,11 +151,9 @@ def plot_rollende_Kugel(path="daten2.csv", show_figure=True):
     for column in df:
         df[column] = df[column].astype(str).str.replace(",", ".").astype(float)
 
-    fallhöhen = df["Auslenkung 1 T2"][::5]  #fallhöhe meint s
-    fallhöhen = [ufloat(fh, dreiecksv_uns_messband_ges) for fh in fallhöhen]
-
-    auslenkungen = mittelwert_t2()
-    h_s = [((get_h(h_0, s=s, L=L, H=H))**(1/2)) for s in fallhöhen]
+    fallhöhen = abstaende_s[::-1]
+    h_s = [(get_h(h_0=h_0, s=s, L=L, H=H))**(1/2) *100 for s in fallhöhen]  #in sqrt cm
+    auslenkungen = np.array(mittelwert_t2())  #in cm
 
     hs_nom = nominal_values(h_s)
     auslenkungen_nom = nominal_values(auslenkungen)
@@ -153,33 +171,32 @@ def plot_rollende_Kugel(path="daten2.csv", show_figure=True):
     plt.plot(hs_nom, f(hs_nom, unumpy.nominal_values(m_fit), unumpy.nominal_values(n_fit)), 'r-',
             label=f'Ausgleichsgerade: {m_fit} * x  + {n_fit}')
     plt.tick_params(axis='both', labelsize="16")
-    plt.xlabel('Fallhöhe als $\sqrt{h(s)}$ [cm]', fontsize="16")
+    plt.xlabel('Fallhöhe als $\sqrt{h(s)}$ [$\sqrt{cm}$]', fontsize="16")
     plt.ylabel('Auslenkung $x_2$ (resultierend) [cm]', fontsize="16")
     plt.legend(fontsize="17")
     plt.grid(True)
+
     if show_figure:
         plt.show()
+
     return m_fit
 
 
-
 if __name__ == "__main__":
-    mittel_werte1 = mittelwert_t1("Auslenkung 2 (resultierend) T1", 26.4)
-    mittel_werte_2 = mittelwert_t1("Auslenkung 4 T1", 17.62, c=2)  #c=2 !!
+    mittel_werte1 = mittelwert_t1("Auslenkung 2 (resultierend) T1", 26.4, header_2="Auslenkung 1 T1")
+    mittel_werte_2 = mittelwert_t1("Auslenkung 4 T1", 17.62, c=2, header_2="Auslenkung 3 T1")  #c=2 !!
 
 
     plot_ausgleichsgerade("Auslenkung 1 T1", mittelwerte_y=mittel_werte1, x_0=17.62, c=1)
     plot_ausgleichsgerade("Auslenkung 3 T1", mittelwerte_y=mittel_werte_2, x_0=26.4, c=2)
 
-    print(steigungen, sum(steigungen))
+    print("steigungen, summe", steigungen, sum(steigungen))
 
 
     for abstand in abstaende_s:
-        print(get_h(h_0,ufloat(abstand, dreiecksv_uns_messband_ges), L, H))
+        print("h:", get_h(h_0,abstand, L, H)*100)  #in cm
 
 
     plot_rollende_Kugel()
 
-    print(get_epsilon(m=plot_rollende_Kugel(show_figure=False), l=l))
-
-
+    print("epsilon: ", get_epsilon(m=plot_rollende_Kugel(show_figure=False), l=l))
