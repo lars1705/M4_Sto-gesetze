@@ -9,7 +9,7 @@ import pandas as pd
 #from wheel.cli import unpack_f
 
 #unc = 2 * 0.1  #cm
-dreiecksv_auslenkung_messstab = 0.05 / np.sqrt(6)  # in cm
+dreiecksv_auslenkung_messstab = 0.1 / np.sqrt(6)  # in cm
 messunsicherheit_waage = .0001 / np.sqrt(6)  #kg
 messunsicherheit_waage_hersteller = 0  #kg
 messunsicherheit_waage_ges = std_dev(ufloat(1, messunsicherheit_waage)+ufloat(1,messunsicherheit_waage_hersteller))
@@ -37,6 +37,7 @@ M_3 = ufloat(63.9 * .001, messunsicherheit_waage_ges)
 
 
 def mittelwert_t1(header:str, y_0:float, header_2:str, path:str="daten1.csv", c:int=1):
+    y_0 = ufloat(y_0, dreiecksv_auslenkung_messstab)
     df = pd.read_csv(path, delimiter=",")
     for column in df:
         df[column] = df[column].str.replace(",", ".").astype(float)
@@ -47,11 +48,14 @@ def mittelwert_t1(header:str, y_0:float, header_2:str, path:str="daten1.csv", c:
         auslenkungen_res = []
         for j in range(5):
             if c==1:
-                auslenkungen_res.append(ufloat(df[header][j+5*i] - y_0, dreiecksv_auslenkung_messstab))
+                auslenkungen_res.append(ufloat(df[header][j+5*i], dreiecksv_auslenkung_messstab) - y_0)
             elif c==2:
-                auslenkungen_res.append(ufloat(y_0 - df[header][j + 5 * i], dreiecksv_auslenkung_messstab))
+                auslenkungen_res.append(y_0-ufloat(df[header][j + 5 * i], dreiecksv_auslenkung_messstab))
+            #print(std_devs(auslenkungen_res))
+
         #print(auslenkungen_res)
         m_wert = sum(auslenkungen_res) / len(auslenkungen_res)
+        print(std_devs(sum(auslenkungen_res)))
         m_werte1.append(m_wert)
     print("-----", m_werte1)
 
@@ -60,9 +64,9 @@ def mittelwert_t1(header:str, y_0:float, header_2:str, path:str="daten1.csv", c:
     data = []
     for i, x in enumerate(df[header_2][::5].values):
         if c==1:
-            data.append([ufloat(17.62-x, dreiecksv_auslenkung_messstab), m_werte1[i]])
+            data.append([ufloat(17.62, dreiecksv_auslenkung_messstab)-ufloat(x, dreiecksv_auslenkung_messstab), m_werte1[i]])
         elif c==2:
-            data.append([ufloat(x-26.4, dreiecksv_auslenkung_messstab), m_werte1[i]])
+            data.append([ufloat(x, dreiecksv_auslenkung_messstab)-ufloat(26.4, dreiecksv_auslenkung_messstab), m_werte1[i]])
     df_2 = pd.DataFrame(data, columns=["Manuelle Auslenkung [cm]", "Mittelwert resultierende Auslenkung [cm]"])
 
 
@@ -70,7 +74,10 @@ def mittelwert_t1(header:str, y_0:float, header_2:str, path:str="daten1.csv", c:
     fig.patch.set_visible(False)
     ax.axis('off')
     ax.axis('tight')
-    ax.table(cellText=df_2.values, colLabels=["Manuelle Auslenkung [cm]", "Mittelwert resultierende Auslenkung [cm]"], loc='center')
+    table = ax.table(cellText=df_2.values, colLabels=[r"Manuelle Auslenkung $a_2$ [cm]", r"Mittelwert resultierende Auslenkung $\bar{a}_1'$ [cm]"], loc='center')
+    table.scale(1, 2)
+    table.auto_set_font_size(False)
+    table.set_fontsize(25)
     fig.tight_layout()
     plt.show()
 
@@ -88,11 +95,33 @@ def mittelwert_t2(header:str="Auslenkung 2 (resultierend) T2", path:str="daten2.
     for i in range(6):
         auslenkungen_res = []
         for j in range(5):
-            auslenkungen_res.append(ufloat(df[header][j + 5 * i]-26.4, dreiecksv_auslenkung_messstab))
+            auslenkungen_res.append(ufloat(df[header][j + 5 * i], dreiecksv_auslenkung_messstab)-ufloat(26.4, dreiecksv_auslenkung_messstab))
         #print(auslenkungen_res)
         m_wert = sum(auslenkungen_res) / len(auslenkungen_res)
         m_werte2.append(m_wert)
     print("\n>>>>>>>>>>>>",m_werte2)
+
+
+
+    data = []
+    for i, x in enumerate(df["Auslenkung 1 T2"][::5].values):
+        data.append(
+            [ufloat(x, dreiecksv_uns_messband_ges), m_werte2[i]])
+
+    df_2 = pd.DataFrame(data, columns=["Manuelle Auslenkung [cm]", "Mittelwert resultierende Auslenkung [cm]"])
+    fig, ax = plt.subplots()
+    fig.patch.set_visible(False)
+    ax.axis('off')
+    ax.axis('tight')
+    table = ax.table(cellText=df_2.values, colLabels=[r"Abstand vom oberen Ende der Fallrinne $s$ [cm]",
+                                                      r"Mittelwert resultierende Auslenkung $\bar{a}'$ [cm]"],
+                     loc='center')
+    table.scale(1, 2)
+    table.auto_set_font_size(False)
+    table.set_fontsize(25)
+    fig.tight_layout()
+    plt.show()
+
     return m_werte2
 
 def f(x, m, n):
@@ -101,14 +130,14 @@ def f(x, m, n):
 
 
 def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path:str="daten1.csv"):
-
+    x_0 = ufloat(x_0, dreiecksv_auslenkung_messstab)
     df = pd.read_csv(path, delimiter=",")
     for column in df:
         df[column] = df[column].str.replace(",", ".").astype(float)
     if c==1:
-        x1 = [ufloat(x_0 - v, dreiecksv_auslenkung_messstab) for v in df[x_name][::5]]
+        x1 = [x_0-ufloat(v, dreiecksv_auslenkung_messstab) for v in df[x_name][::5]]
     elif c==2:
-        x1 = [ufloat(v - x_0, dreiecksv_auslenkung_messstab) for v in df[x_name][::5]]
+        x1 = [ufloat(v, dreiecksv_auslenkung_messstab)-x_0 for v in df[x_name][::5]]
     #print(x1)
     #y1 = [ufloat(v, dreiecksv_auslenkung_maß) for v in df[y_name]]
     y1 = mittelwerte_y
@@ -117,6 +146,7 @@ def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path
     y1_nominal = nominal_values(y1)
     x1_err = std_devs(x1)
     y1_err = std_devs(y1)
+    print(y1)
 
     params, params_covariance = curve_fit(f, x1_nominal, y1_nominal, p0=[1, 0], sigma=y1_err, absolute_sigma=True)
     m_fit, n_fit = ufloat(params[0], np.sqrt(params_covariance[0, 0])), ufloat(params[1],
@@ -124,16 +154,16 @@ def plot_ausgleichsgerade(x_name:str, mittelwerte_y:list, x_0:float, c:int, path
 
     steigungen.append(m_fit)
 
-    plt.figure(figsize=(10, 6))  #reset zu (15, 7) für legende nicht über md
+    plt.figure(figsize=(15, 7))  #reset zu (15, 7) für legende nicht über md
     #print(x1_err, y1_err)
-    plt.errorbar(x1_nominal, y1_nominal, xerr=x1_err, yerr=y1_err, marker='.', markersize=8, linestyle="none", label="Messdaten")
+    plt.errorbar(x1_nominal, y1_nominal, xerr=x1_err, yerr=y1_err, marker='.', markersize=4, linestyle="none", label="Messdaten mit Unsicherheiten")
     #plt.errorbar(zeiten_nom, positionen_nom, yerr=y1_err,fmt=".", label='Messdaten')
     plt.plot(x1_nominal, f(x1_nominal, unumpy.nominal_values(m_fit), unumpy.nominal_values(n_fit)), 'r-',
             label=f'Ausgleichsgerade: {m_fit} * x  + {n_fit}')
-    plt.tick_params(axis='both', labelsize="16")
-    plt.xlabel('Auslenkung $x_1$ [cm]', fontsize="16")
-    plt.ylabel('Auslenkung $x_2$ (resultierend) [cm]', fontsize="16")
-    plt.legend(fontsize="17")
+    plt.tick_params(axis='both', labelsize="35")
+    plt.xlabel('Auslenkung $a_2$ [cm]', fontsize="35")
+    plt.ylabel(r"Auslenkung $a_1'$ (resultierend) [cm]", fontsize="35")
+    plt.legend(fontsize="35")
     plt.grid(True)
     plt.show()
 
@@ -166,14 +196,14 @@ def plot_rollende_Kugel(path="daten2.csv", show_figure=True):
                                                                                np.sqrt(params_covariance[1, 1]))
 
     plt.figure(figsize=(10, 6))  #reset zu (15, 7) für legende nicht über md
-    plt.errorbar(hs_nom, auslenkungen_nom, xerr=hs_err, yerr=auslenkungen_err, marker='.', markersize=8, linestyle="none", label="Messdaten")
+    plt.errorbar(hs_nom, auslenkungen_nom, xerr=hs_err, yerr=auslenkungen_err, marker='.', markersize=5, linestyle="none", label="Messdaten")
     #plt.errorbar(zeiten_nom, positionen_nom, yerr=y1_err,fmt=".", label='Messdaten')
     plt.plot(hs_nom, f(hs_nom, unumpy.nominal_values(m_fit), unumpy.nominal_values(n_fit)), 'r-',
-            label=f'Ausgleichsgerade: {m_fit} * x  + {n_fit}')
-    plt.tick_params(axis='both', labelsize="16")
-    plt.xlabel('Fallhöhe als $\sqrt{h(s)}$ [$\sqrt{cm}$]', fontsize="16")
-    plt.ylabel('Auslenkung $x_2$ (resultierend) [cm]', fontsize="16")
-    plt.legend(fontsize="17")
+            label=f'Ausgleichsgerade: {m_fit} * x - {abs(n_fit)}')
+    plt.tick_params(axis='both', labelsize="35")
+    plt.xlabel('Fallhöhe als $\sqrt{h(s)}$ [$\sqrt{cm}$]', fontsize="35")
+    plt.ylabel('Auslenkung $a$ (resultierend) [cm]', fontsize="35")
+    plt.legend(fontsize="35")
     plt.grid(True)
 
     if show_figure:
@@ -187,6 +217,7 @@ if __name__ == "__main__":
     mittel_werte_2 = mittelwert_t1("Auslenkung 4 T1", 17.62, c=2, header_2="Auslenkung 3 T1")  #c=2 !!
 
 
+    print(mittel_werte1)
     plot_ausgleichsgerade("Auslenkung 1 T1", mittelwerte_y=mittel_werte1, x_0=17.62, c=1)
     plot_ausgleichsgerade("Auslenkung 3 T1", mittelwerte_y=mittel_werte_2, x_0=26.4, c=2)
 
